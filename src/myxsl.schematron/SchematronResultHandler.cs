@@ -41,10 +41,56 @@ namespace myxsl.schematron {
          XPathNavigator doc = ToDocument().CreateNavigator();
          doc.MoveToChild(XPathNodeType.Element);
 
-         return doc.MoveToChild("failed-assert", SchematronInvoker.SvrlNamespace);
+         return !doc.MoveToChild( "failed-assert", SchematronInvoker.SvrlNamespace);
       }
 
-      public IXPathNavigable ToDocument() {
+        public (bool IsValid,List<SchematronFailedAssert> FailedAsserts) GetValidationResult()
+        {
+    
+            var result = new List<SchematronFailedAssert>();
+            XPathNavigator doc = ToDocument().CreateNavigator();
+            doc.MoveToChild(XPathNodeType.Element);
+            var failedAssertNavigators = doc.SelectDescendants("failed-assert", SchematronInvoker.SvrlNamespace,false)?.Cast<XPathNavigator>()?.ToList();
+            
+            foreach (var item in failedAssertNavigators)
+            {
+                var fa = new SchematronFailedAssert()
+                {
+                    Id = item.GetAttribute("id", String.Empty),
+                    Test = item.GetAttribute("test", String.Empty),
+                    Location = item.GetAttribute("location", String.Empty),
+                    Role = item.GetAttribute("role", String.Empty),
+                    Flag = item.GetAttribute("flag", String.Empty),
+                    
+                };
+
+                var text = item.SelectChildren("text", SchematronInvoker.SvrlNamespace)?.Cast<XPathNavigator>().ToList();
+                fa.Text = text?.FirstOrDefault()?.Value;
+
+
+                var drs = item.SelectChildren("diagnostic-reference", SchematronInvoker.SvrlNamespace)?.Cast<XPathNavigator>().ToList();
+                if (drs?.Count > 0)
+                {
+                    fa.DiagnosticReferences = new List<DiagnosticReference>();
+                    foreach (var drn in drs)
+                    {
+                        var dr = new DiagnosticReference()
+                        {
+                            Diagnostic = drn.GetAttribute("diagnostic", String.Empty)
+                        };
+                        var drtext = drn.SelectChildren("text", SchematronInvoker.SvrlNamespace)?.Cast<XPathNavigator>().ToList();
+                        dr.Text = drtext?.FirstOrDefault()?.Value;
+                        fa.DiagnosticReferences.Add(dr);
+                    }
+                }
+
+                result.Add(fa);
+            }
+            return (result.Count == 0, result);
+        }
+
+
+        public IXPathNavigable ToDocument() {
 
          IXPathNavigable doc = this.validator.ItemFactory.BuildNode();
 
@@ -57,7 +103,10 @@ namespace myxsl.schematron {
          return doc;
       }
 
-      public void To(Stream output) {
+       
+
+
+        public void To(Stream output) {
          To(output, null);
       }
 
